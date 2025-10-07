@@ -10,7 +10,7 @@ from pydantic import BaseModel
 import json
 from contextlib import asynccontextmanager
 
-from src.microsoft_agent_framework import AgentBuilder
+from src.microsoft_agent_framework import AgentBuilder, TeamOrchestrator
 from src.microsoft_agent_framework.database import DatabaseManager, get_database, init_database
 from src.microsoft_agent_framework.database.models import Agent as AgentModel, Conversation, Message
 from src.microsoft_agent_framework.tools import WebTools, FileTools, CodeTools
@@ -62,6 +62,7 @@ class DiscoverAPIsRequest(BaseModel):
 
 # Global variables
 agent_builder: Optional[AgentBuilder] = None
+team_orchestrator: Optional[TeamOrchestrator] = None
 web_tools: Optional[WebTools] = None
 file_tools: Optional[FileTools] = None
 code_tools: Optional[CodeTools] = None
@@ -70,7 +71,7 @@ code_tools: Optional[CodeTools] = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global agent_builder, web_tools, file_tools, code_tools
+    global agent_builder, team_orchestrator, web_tools, file_tools, code_tools
     
     # Startup
     print("🚀 Starting Microsoft Agent Framework...")
@@ -85,6 +86,7 @@ async def lifespan(app: FastAPI):
     
     # Initialize agent builder and tools
     agent_builder = AgentBuilder()
+    team_orchestrator = TeamOrchestrator()
     web_tools = WebTools()
     file_tools = FileTools()
     code_tools = CodeTools()
@@ -96,7 +98,7 @@ async def lifespan(app: FastAPI):
     agent_builder.register_tool("execute_python", code_tools.execute_python, "Execute Python code")
     agent_builder.register_tool("validate_syntax", code_tools.validate_python_syntax, "Validate Python syntax")
     
-    print("✅ Agent builder and tools initialized")
+    print("✅ Agent builder, team orchestrator, and tools initialized")
     
     yield
     
@@ -104,6 +106,9 @@ async def lifespan(app: FastAPI):
     print("🛑 Shutting down Microsoft Agent Framework...")
     if web_tools:
         await web_tools.close()
+    
+    if agent_builder:
+        await agent_builder.cleanup()
     
     db = get_database()
     await db.close()
@@ -591,6 +596,111 @@ async def list_mcp_templates():
             }
         ]
     }
+
+
+# Team Orchestrator Endpoints
+
+@app.post("/team/chat")
+async def chat_with_team(request: ChatRequest):
+    """Chat with the team orchestrator - single entry point for all communication."""
+    if not team_orchestrator:
+        raise HTTPException(status_code=500, detail="Team orchestrator not initialized")
+    
+    try:
+        response = await team_orchestrator.chat(request.message)
+        return {
+            "response": response,
+            "orchestrator": "Team Lead",
+            "message": request.message
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error communicating with team: {str(e)}")
+
+
+@app.get("/team/status")
+async def get_team_status():
+    """Get current team status and member availability."""
+    if not team_orchestrator:
+        raise HTTPException(status_code=500, detail="Team orchestrator not initialized")
+    
+    try:
+        status = await team_orchestrator.get_team_status()
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting team status: {str(e)}")
+
+
+@app.post("/team/add-member")
+async def add_team_member(
+    role: str,
+    specialties: List[str],
+    template_name: Optional[str] = None,
+    custom_instructions: Optional[str] = None,
+    api_specs: Optional[List[str]] = None
+):
+    """Add a new team member with specific role and specialties."""
+    if not team_orchestrator:
+        raise HTTPException(status_code=500, detail="Team orchestrator not initialized")
+    
+    try:
+        member_id = await team_orchestrator.add_team_member(
+            role=role,
+            specialties=specialties,
+            template_name=template_name,
+            custom_instructions=custom_instructions,
+            api_specs=api_specs
+        )
+        
+        return {
+            "member_id": member_id,
+            "role": role,
+            "specialties": specialties,
+            "message": f"Team member '{role}' added successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error adding team member: {str(e)}")
+
+
+@app.post("/team/enhance-member")
+async def enhance_team_member_with_api(role: str, api_specs: List[str]):
+    """Enhance an existing team member with API integration capabilities."""
+    if not team_orchestrator:
+        raise HTTPException(status_code=500, detail="Team orchestrator not initialized")
+    
+    try:
+        success = await team_orchestrator.add_api_integration_to_member(role, api_specs)
+        
+        if success:
+            return {
+                "role": role,
+                "api_specs": api_specs,
+                "message": f"Enhanced '{role}' with API integration capabilities"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Team member '{role}' not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error enhancing team member: {str(e)}")
+
+
+@app.get("/team/members")
+async def list_team_members():
+    """List all team members and their capabilities."""
+    if not team_orchestrator:
+        raise HTTPException(status_code=500, detail="Team orchestrator not initialized")
+    
+    try:
+        status = await team_orchestrator.get_team_status()
+        return {
+            "team_members": status["team_members"],
+            "summary": {
+                "total_members": status["total_members"],
+                "available_members": status["available_members"],
+                "active_tasks": status["active_tasks"]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing team members: {str(e)}")
 
 
 if __name__ == "__main__":
