@@ -52,7 +52,7 @@ class CreateAgentWithAPIRequest(BaseModel):
     api_specs: List[str]
     instructions: str
     template_name: Optional[str] = None
-    model: str = "llama-3.1-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     temperature: float = 0.7
 
 
