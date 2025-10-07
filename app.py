@@ -21,7 +21,7 @@ class CreateAgentRequest(BaseModel):
     name: str
     template_name: Optional[str] = None
     instructions: Optional[str] = None
-    model: Optional[str] = "llama3-70b-8192"
+    model: Optional[str] = "llama-3.1-70b-versatile"
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 4096
     tools: Optional[List[str]] = []
@@ -53,9 +53,13 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starting Microsoft Agent Framework...")
     
-    # Initialize database
-    await init_database()
-    print("✅ Database initialized")
+    try:
+        # Initialize database
+        await init_database()
+        print("✅ Database initialized")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        print("🔄 Continuing without database (will retry on first request)")
     
     # Initialize agent builder and tools
     agent_builder = AgentBuilder()

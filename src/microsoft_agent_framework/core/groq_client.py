@@ -10,7 +10,7 @@ import json
 class GroqConfig(BaseModel):
     """Configuration for Groq client."""
     api_key: str
-    model: str = "llama3-70b-8192"
+    model: str = "llama-3.1-70b-versatile"
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 1.0
