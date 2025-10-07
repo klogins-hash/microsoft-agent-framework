@@ -1,0 +1,40 @@
+name: Deploy to Northflank
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run tests
+      run: |
+        # Add your test commands here
+        python -c "import src.microsoft_agent_framework; print('Import successful')"
+    
+    - name: Deploy to Northflank
+      if: github.ref == 'refs/heads/main'
+      uses: northflank/deploy-to-northflank@v1
+      with:
+        token: ${{ secrets.NORTHFLANK_TOKEN }}
+        project-id: ${{ secrets.NORTHFLANK_PROJECT_ID }}
+        service-id: microsoft-agent-framework
+        image-path: .
+        build-arguments: |
+          --build-arg BUILDPACK_URL=https://github.com/heroku/heroku-buildpack-python
