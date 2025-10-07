@@ -1,15 +1,23 @@
 """Agent builder for creating and managing Microsoft agents using Groq models."""
 
-from typing import Dict, List, Any, Optional, Type, Callable
+from typing import Dict, List, Any, Optional, Type, Callable, Union
 from pydantic import BaseModel
 import json
 import yaml
 from pathlib import Path
+import logging
 
 from .base_agent import BaseAgent, ChatCompletionAgent, AgentConfig
 from .groq_client import GroqClient, GroqConfig
 from .context_provider import ContextProvider, InMemoryContextProvider, FileContextProvider
 from .agent_thread import AgentThread
+from ..mcp import (
+    APISpecificationParser, APIDefinition, MCPServerGenerator, 
+    MCPServerCode, MCPServerInfo, MCPRegistry, get_registry,
+    MCPClient, MCPTool
+)
+
+logger = logging.getLogger(__name__)
 
 
 class AgentTemplate(BaseModel):
@@ -43,6 +51,12 @@ class AgentBuilder:
         self.blueprints: Dict[str, AgentBlueprint] = {}
         self.tools_registry: Dict[str, Callable] = {}
         self.middleware_registry: Dict[str, Callable] = {}
+        
+        # MCP components
+        self.api_parser = APISpecificationParser()
+        self.mcp_generator = MCPServerGenerator()
+        self.mcp_registry = get_registry()
+        self.mcp_client = MCPClient()
         
         # Load built-in templates
         self._load_builtin_templates()
@@ -321,3 +335,214 @@ Provide a clear, actionable recommendation."""
         
         response = await self.master_agent.run_async(prompt)
         return response.content
+    
+    # MCP Integration Methods
+    
+    async def create_mcp_server_from_api(
+        self, 
+        api_source: Union[str, Dict], 
+        api_type: str = "openapi",
+        server_type: str = "http",
+        deployment_target: str = "local",
+        server_name: Optional[str] = None
+    ) -> MCPServerInfo:
+        """Create and deploy MCP server from API specification."""
+        try:
+            # Parse API specification
+            if api_type == "openapi":
+                api_def = self.api_parser.parse_openapi(api_source)
+            elif api_type == "graphql":
+                api_def = self.api_parser.parse_graphql(api_source)
+            elif api_type == "rest_discovery":
+                api_def = self.api_parser.parse_rest_discovery(api_source)
+            elif api_type == "postman":
+                api_def = self.api_parser.parse_postman_collection(api_source)
+            else:
+                raise ValueError(f"Unsupported API type: {api_type}")
+            
+            # Generate MCP server
+            if server_type == "stdio":
+                server_code = self.mcp_generator.generate_stdio_server(api_def, server_name)
+            elif server_type == "http":
+                server_code = self.mcp_generator.generate_http_server(api_def, server_name)
+            elif server_type == "websocket":
+                server_code = self.mcp_generator.generate_websocket_server(api_def, server_name)
+            else:
+                raise ValueError(f"Unsupported server type: {server_type}")
+            
+            # Deploy server
+            server_info = self.mcp_generator.deploy_server(server_code, deployment_target)
+            
+            # Register in registry
+            server_id = await self.mcp_registry.register_mcp_server(
+                server_info, 
+                tags=[api_type, server_type, "auto_generated"]
+            )
+            
+            logger.info(f"Created MCP server {server_info.name} from {api_type} API")
+            return server_info
+            
+        except Exception as e:
+            logger.error(f"Error creating MCP server: {e}")
+            raise
+    
+    async def register_mcp_server(self, server_info: MCPServerInfo) -> str:
+        """Register an MCP server with the agent builder."""
+        server_id = await self.mcp_registry.register_mcp_server(server_info)
+        
+        # Connect to the server
+        server = self.mcp_registry.get_server(server_id)
+        if server:
+            await self.mcp_client.connect_to_server(server)
+        
+        return server_id
+    
+    async def create_agent_with_api_integration(
+        self,
+        name: str,
+        api_specs: List[Union[str, Dict]],
+        instructions: str,
+        template_name: Optional[str] = None,
+        model: str = "llama-3.1-70b-versatile",
+        temperature: float = 0.7
+    ) -> BaseAgent:
+        """Create agent with automatic API integration via MCP."""
+        try:
+            # Create MCP servers for each API
+            mcp_servers = []
+            for api_spec in api_specs:
+                if isinstance(api_spec, str):
+                    # Determine API type from URL/path
+                    if api_spec.endswith(('.json', '.yaml', '.yml')):
+                        api_type = "openapi"
+                    elif '/graphql' in api_spec:
+                        api_type = "graphql"
+                    else:
+                        api_type = "rest_discovery"
+                else:
+                    api_type = "openapi"  # Assume dict is OpenAPI spec
+                
+                server_info = await self.create_mcp_server_from_api(
+                    api_spec, 
+                    api_type=api_type,
+                    server_type="http"
+                )
+                mcp_servers.append(server_info)
+            
+            # Get available tools from MCP servers
+            available_tools = []
+            for server_info in mcp_servers:
+                server = self.mcp_registry.get_server(server_info.name)
+                if server:
+                    tools = await self.mcp_client.list_tools(server.id)
+                    available_tools.extend(tools)
+            
+            # Create agent configuration
+            config = AgentConfig(
+                name=name,
+                instructions=f"{instructions}\n\nYou have access to the following API tools: {[tool.name for tool in available_tools]}",
+                model=model,
+                temperature=temperature,
+                max_tokens=4096
+            )
+            
+            # Use template if specified
+            if template_name and template_name in self.templates:
+                template = self.templates[template_name]
+                config.instructions = f"{template.instructions}\n\n{config.instructions}"
+                config.model = template.model
+                config.temperature = template.temperature
+            
+            # Create agent
+            agent = ChatCompletionAgent(
+                config=config,
+                groq_client=self.groq_client,
+                context_provider=InMemoryContextProvider()
+            )
+            
+            # Register MCP tools with agent
+            for tool in available_tools:
+                self.register_tool(
+                    tool.name,
+                    lambda args, t=tool: self._call_mcp_tool(t, args),
+                    tool.description
+                )
+            
+            logger.info(f"Created agent {name} with {len(available_tools)} API tools")
+            return agent
+            
+        except Exception as e:
+            logger.error(f"Error creating agent with API integration: {e}")
+            raise
+    
+    async def _call_mcp_tool(self, tool: MCPTool, arguments: Dict[str, Any]) -> str:
+        """Call an MCP tool."""
+        try:
+            result = await self.mcp_client.call_tool(tool.server_id, tool.name, arguments)
+            return result or "No response from tool"
+        except Exception as e:
+            logger.error(f"Error calling MCP tool {tool.name}: {e}")
+            return f"Error calling tool: {e}"
+    
+    async def discover_apis(self, domain: str) -> List[Dict[str, Any]]:
+        """Discover APIs in a domain."""
+        return await self.mcp_registry.discover_apis(domain)
+    
+    def list_mcp_servers(self) -> List[Dict[str, Any]]:
+        """List all registered MCP servers."""
+        servers = self.mcp_registry.list_servers()
+        return [
+            {
+                "id": server.id,
+                "name": server.name,
+                "description": server.description,
+                "transport_type": server.transport_type,
+                "capabilities": server.capabilities,
+                "status": server.status,
+                "health_status": server.health_status
+            }
+            for server in servers
+        ]
+    
+    async def health_check_mcp_servers(self) -> Dict[str, bool]:
+        """Perform health checks on all MCP servers."""
+        return await self.mcp_registry.health_check_servers()
+    
+    def search_mcp_servers(self, query: str) -> List[Dict[str, Any]]:
+        """Search MCP servers by capability or name."""
+        servers = self.mcp_registry.search_servers(query)
+        return [
+            {
+                "id": server.id,
+                "name": server.name,
+                "description": server.description,
+                "capabilities": server.capabilities,
+                "relevance_score": self._calculate_relevance(server, query)
+            }
+            for server in servers
+        ]
+    
+    def _calculate_relevance(self, server, query: str) -> float:
+        """Calculate relevance score for search results."""
+        query_lower = query.lower()
+        score = 0.0
+        
+        # Name match
+        if query_lower in server.name.lower():
+            score += 0.5
+        
+        # Description match
+        if query_lower in server.description.lower():
+            score += 0.3
+        
+        # Capability match
+        for capability in server.capabilities:
+            if query_lower in capability.lower():
+                score += 0.2
+        
+        return min(score, 1.0)
+    
+    async def cleanup(self):
+        """Cleanup MCP resources."""
+        await self.mcp_client.cleanup()
+        await self.mcp_registry.cleanup()

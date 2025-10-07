@@ -1,21 +1,27 @@
-# Microsoft Agent Framework with Groq Integration
+{{ ... }}
 
 A powerful framework for building AI agents inspired by the Microsoft Agent Framework, but using Groq models instead of OpenAI. This framework provides an expert agent builder that specializes in creating and configuring other Microsoft-style agents.
 
 ## 🚀 Features
 
-- **Expert Agent Builder**: Meta-agent that helps you design and create other agents
+- **Expert Agent Builder**: Meta-agent that specializes in creating other Microsoft-style agents
+- **MCP Integration**: Automatic API-to-MCP server conversion for universal API access
 - **Multiple Agent Templates**: Pre-built templates for common use cases
-- **Groq Model Integration**: Fast inference using Groq's LLM API
-- **Tool System**: Extensible tool framework for agent capabilities
+- **Groq Integration**: Fast LLM inference using latest Groq models
 - **Context Management**: Persistent conversation threads and memory
-- **Streaming Support**: Real-time response streaming
-- **CLI Interface**: Easy-to-use command-line interface
+- **Tool System**: Extensible tools for web, file, and code operations
+- **Microsoft Integration Ready**: Built for Microsoft ecosystem compatibility
+- **Database Persistence**: SQLAlchemy-based data storage
+- **Streaming Support**: Real-time conversation streaming
+- **FastAPI Web Interface**: Complete REST API for web integration
+- **API Discovery**: Automatic discovery and integration of external APIs
+- **MCP Server Generation**: Convert any API (OpenAPI, GraphQL, REST, Webhooks) to MCP server interface
 
 ## 📦 Installation
 
 1. Clone the repository:
 ```bash
+{{ ... }}
 git clone <repository-url>
 cd microsoft-agent-framework
 ```
@@ -87,23 +93,21 @@ async def main():
     print(response)
 
 asyncio.run(main())
-```
-
 ## 🤖 Available Agent Templates
 
 | Template | Description | Use Cases |
 |----------|-------------|-----------|
 | `customer_support` | Professional customer service agent | Help desk, issue resolution, inquiries |
 | `code_assistant` | Software development helper | Code generation, debugging, reviews |
-| `data_analyst` | Data analysis and visualization | Data insights, reporting, statistics |
-| `teams_bot` | Microsoft Teams integration | Team collaboration, scheduling |
+| `data_analyst` | Data analysis and visualization expert | Data insights, reporting, statistics |
+| `teams_bot` | Microsoft Teams integration ready | Team collaboration, scheduling |
 | `agent_builder` | Meta-agent for building other agents | Agent architecture, configuration |
 
 ## 🛠️ Tools and Capabilities
 
 The framework includes several built-in tool categories:
 
-### Web Tools
+{{ ... }}
 - Fetch content from URLs
 - Make HTTP requests
 - Check URL status

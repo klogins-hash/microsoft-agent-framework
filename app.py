@@ -14,6 +14,7 @@ from src.microsoft_agent_framework import AgentBuilder
 from src.microsoft_agent_framework.database import DatabaseManager, get_database, init_database
 from src.microsoft_agent_framework.database.models import Agent as AgentModel, Conversation, Message
 from src.microsoft_agent_framework.tools import WebTools, FileTools, CodeTools
+from src.microsoft_agent_framework.mcp import APISpecificationParser, MCPServerGenerator, get_registry
 
 
 # Pydantic models for API
@@ -36,6 +37,27 @@ class ChatResponse(BaseModel):
     response: str
     conversation_id: str
     agent_id: str
+
+
+class GenerateMCPServerRequest(BaseModel):
+    api_source: str
+    api_type: str = "openapi"  # openapi, graphql, rest_discovery, postman
+    server_type: str = "http"  # stdio, http, websocket
+    deployment_target: str = "local"  # local, docker, kubernetes
+    server_name: Optional[str] = None
+
+
+class CreateAgentWithAPIRequest(BaseModel):
+    name: str
+    api_specs: List[str]
+    instructions: str
+    template_name: Optional[str] = None
+    model: str = "llama-3.1-70b-versatile"
+    temperature: float = 0.7
+
+
+class DiscoverAPIsRequest(BaseModel):
+    domain: str
 
 
 # Global variables
@@ -390,6 +412,185 @@ async def build_agent_from_description(description: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# MCP Integration Endpoints
+
+@app.post("/mcp/generate-server")
+async def generate_mcp_server(request: GenerateMCPServerRequest):
+    """Generate MCP server from API specification."""
+    if not agent_builder:
+        raise HTTPException(status_code=500, detail="Agent builder not initialized")
+    
+    try:
+        server_info = await agent_builder.create_mcp_server_from_api(
+            api_source=request.api_source,
+            api_type=request.api_type,
+            server_type=request.server_type,
+            deployment_target=request.deployment_target,
+            server_name=request.server_name
+        )
+        
+        return {
+            "server_info": {
+                "name": server_info.name,
+                "transport_type": server_info.transport_type,
+                "connection_info": server_info.connection_info,
+                "capabilities": server_info.capabilities,
+                "status": server_info.status
+            },
+            "message": f"MCP server '{server_info.name}' generated and deployed successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating MCP server: {str(e)}")
+
+
+@app.get("/mcp/servers")
+async def list_mcp_servers():
+    """List all registered MCP servers."""
+    if not agent_builder:
+        raise HTTPException(status_code=500, detail="Agent builder not initialized")
+    
+    try:
+        servers = agent_builder.list_mcp_servers()
+        return {
+            "servers": servers,
+            "count": len(servers)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing MCP servers: {str(e)}")
+
+
+@app.get("/mcp/servers/search")
+async def search_mcp_servers(query: str):
+    """Search MCP servers by capability or name."""
+    if not agent_builder:
+        raise HTTPException(status_code=500, detail="Agent builder not initialized")
+    
+    try:
+        results = agent_builder.search_mcp_servers(query)
+        return {
+            "results": results,
+            "query": query,
+            "count": len(results)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error searching MCP servers: {str(e)}")
+
+
+@app.get("/mcp/servers/health")
+async def health_check_mcp_servers():
+    """Perform health checks on all MCP servers."""
+    if not agent_builder:
+        raise HTTPException(status_code=500, detail="Agent builder not initialized")
+    
+    try:
+        health_results = await agent_builder.health_check_mcp_servers()
+        healthy_count = sum(1 for status in health_results.values() if status is True)
+        total_count = len(health_results)
+        
+        return {
+            "health_results": health_results,
+            "summary": {
+                "healthy": healthy_count,
+                "total": total_count,
+                "health_percentage": (healthy_count / total_count * 100) if total_count > 0 else 0
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking MCP server health: {str(e)}")
+
+
+@app.post("/mcp/discover-apis")
+async def discover_apis(request: DiscoverAPIsRequest):
+    """Discover APIs in a domain."""
+    if not agent_builder:
+        raise HTTPException(status_code=500, detail="Agent builder not initialized")
+    
+    try:
+        discovered_apis = await agent_builder.discover_apis(request.domain)
+        return {
+            "domain": request.domain,
+            "discovered_apis": discovered_apis,
+            "count": len(discovered_apis)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error discovering APIs: {str(e)}")
+
+
+@app.post("/agents/create-with-api")
+async def create_agent_with_api_integration(request: CreateAgentWithAPIRequest):
+    """Create agent with automatic API integration via MCP."""
+    if not agent_builder:
+        raise HTTPException(status_code=500, detail="Agent builder not initialized")
+    
+    try:
+        # Create agent with API integration
+        agent = await agent_builder.create_agent_with_api_integration(
+            name=request.name,
+            api_specs=request.api_specs,
+            instructions=request.instructions,
+            template_name=request.template_name,
+            model=request.model,
+            temperature=request.temperature
+        )
+        
+        # Store agent in database
+        db = get_database()
+        async with db.get_session() as session:
+            agent_model = AgentModel(
+                name=request.name,
+                instructions=request.instructions,
+                model=request.model,
+                temperature=str(request.temperature),
+                tools=request.api_specs,
+                agent_metadata={"api_integrated": True, "api_specs": request.api_specs}
+            )
+            session.add(agent_model)
+            await session.commit()
+            await session.refresh(agent_model)
+            
+            return {
+                "agent": agent_model.to_dict(),
+                "message": f"Agent '{request.name}' created with API integration",
+                "api_integrations": len(request.api_specs)
+            }
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating agent with API integration: {str(e)}")
+
+
+@app.get("/mcp/templates")
+async def list_mcp_templates():
+    """List available MCP server templates."""
+    return {
+        "templates": [
+            {
+                "name": "rest_api",
+                "description": "Standard REST API with CRUD operations",
+                "supported_methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                "features": ["Path parameters", "Query parameters", "Request body handling"]
+            },
+            {
+                "name": "graphql_api", 
+                "description": "GraphQL API with queries and mutations",
+                "supported_operations": ["Query", "Mutation", "Subscription"],
+                "features": ["Query operations", "Variable handling", "Introspection"]
+            },
+            {
+                "name": "webhook_api",
+                "description": "Webhook-based event-driven API",
+                "supported_events": ["create", "update", "delete", "custom"],
+                "features": ["Event subscription", "Signature verification", "Retry mechanisms"]
+            },
+            {
+                "name": "streaming_api",
+                "description": "Real-time streaming data API", 
+                "supported_protocols": ["WebSocket", "Server-Sent Events", "HTTP Streaming"],
+                "features": ["Real-time data", "Connection management", "Backpressure handling"]
+            }
+        ]
+    }
 
 
 if __name__ == "__main__":
