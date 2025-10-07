@@ -22,7 +22,7 @@ class Agent(Base):
     temperature = Column(String(10), default="0.7")
     max_tokens = Column(Integer, default=4096)
     tools = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    agent_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
@@ -41,7 +41,7 @@ class Agent(Base):
             "temperature": float(self.temperature),
             "max_tokens": self.max_tokens,
             "tools": self.tools,
-            "metadata": self.metadata,
+            "metadata": self.agent_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "is_active": self.is_active
@@ -56,7 +56,7 @@ class Conversation(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String, ForeignKey("agents.id"), nullable=False)
     title = Column(String(255), nullable=True)
-    metadata = Column(JSON, default=dict)
+    agent_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
@@ -71,7 +71,7 @@ class Conversation(Base):
             "id": self.id,
             "agent_id": self.agent_id,
             "title": self.title,
-            "metadata": self.metadata,
+            "metadata": self.agent_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "is_active": self.is_active,
@@ -88,7 +88,7 @@ class Message(Base):
     conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
     role = Column(String(20), nullable=False)  # user, assistant, system, tool
     content = Column(Text, nullable=False)
-    metadata = Column(JSON, default=dict)
+    agent_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -101,7 +101,7 @@ class Message(Base):
             "conversation_id": self.conversation_id,
             "role": self.role,
             "content": self.content,
-            "metadata": self.metadata,
+            "metadata": self.agent_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 
@@ -119,7 +119,7 @@ class AgentTemplate(Base):
     temperature = Column(String(10), default="0.7")
     max_tokens = Column(Integer, default=4096)
     tools = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    agent_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
@@ -135,7 +135,7 @@ class AgentTemplate(Base):
             "temperature": float(self.temperature),
             "max_tokens": self.max_tokens,
             "tools": self.tools,
-            "metadata": self.metadata,
+            "metadata": self.agent_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "is_active": self.is_active
