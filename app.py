@@ -120,19 +120,22 @@ app = FastAPI(
     title="Microsoft Agent Framework API",
     description="API for building and managing AI agents with Groq models",
     version="1.0.0",
-    lifespan=lifespan
 )
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",  # React development server
+        "https://web--microsoft-agent-framework--4h7vh8ddvxpx.code.run",  # Production
+        "*"  # Allow all origins for now - configure appropriately for production
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-
+# Root endpoint
 @app.get("/")
 async def root():
     """Root endpoint."""
