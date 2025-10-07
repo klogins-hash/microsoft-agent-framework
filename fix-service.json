@@ -1,0 +1,10 @@
+{
+  "buildSettings": {
+    "dockerfile": {
+      "buildEngine": "kaniko",
+      "useCache": false,
+      "dockerFilePath": "Dockerfile",
+      "dockerWorkDir": "."
+    }
+  }
+}
