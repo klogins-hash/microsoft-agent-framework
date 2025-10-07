@@ -1,0 +1,12 @@
+{
+  "env": {
+    "PORT": "8000",
+    "PYTHONPATH": "/app/src",
+    "DEFAULT_GROQ_MODEL": "llama3-70b-8192",
+    "DEFAULT_TEMPERATURE": "0.7",
+    "DEFAULT_MAX_TOKENS": "4096",
+    "GROQ_API_KEY": "gsk_placeholder_replace_with_actual_key",
+    "DATABASE_URL": "postgresql://postgres:postgres@postgresql.ns-4h7vh8ddvxpx.svc.cluster.local:5432/postgres"
+  },
+  "startCommand": "uvicorn app:app --host 0.0.0.0 --port $PORT"
+}
