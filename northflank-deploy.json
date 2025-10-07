@@ -1,0 +1,72 @@
+{
+  "name": "microsoft-agent-framework",
+  "description": "Microsoft Agent Framework with Groq integration - Expert agent builder",
+  "spec": {
+    "kind": "Deployment",
+    "version": "v1",
+    "spec": {
+      "name": "microsoft-agent-framework",
+      "billing": {
+        "deploymentPlan": "nf-compute-20"
+      },
+      "deployment": {
+        "instances": 1,
+        "docker": {
+          "configType": "default"
+        },
+        "internal": {
+          "id": "microsoft-agent-framework",
+          "branch": "main",
+          "projectType": "python",
+          "buildpack": {
+            "name": "python"
+          }
+        }
+      },
+      "runtimeEnvironment": {
+        "baseImage": "python:3.11-slim",
+        "buildArguments": {},
+        "buildCommands": [
+          "pip install --no-cache-dir -r requirements.txt"
+        ],
+        "startCommand": "uvicorn app:app --host 0.0.0.0 --port $PORT"
+      },
+      "ports": [
+        {
+          "name": "web",
+          "internalPort": 8000,
+          "public": true,
+          "protocol": "HTTP",
+          "security": {
+            "policies": [],
+            "credentials": []
+          },
+          "domains": [],
+          "disableNfDomain": false
+        }
+      ],
+      "env": [
+        {
+          "name": "PORT",
+          "value": "8000"
+        },
+        {
+          "name": "PYTHONPATH",
+          "value": "/app/src"
+        },
+        {
+          "name": "DEFAULT_GROQ_MODEL",
+          "value": "llama3-70b-8192"
+        },
+        {
+          "name": "DEFAULT_TEMPERATURE",
+          "value": "0.7"
+        },
+        {
+          "name": "DEFAULT_MAX_TOKENS",
+          "value": "4096"
+        }
+      ]
+    }
+  }
+}
