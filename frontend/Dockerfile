@@ -5,13 +5,13 @@ FROM node:18-alpine as build
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY frontend/package*.json ./
 
 # Install dependencies
 RUN npm ci --only=production
 
 # Copy source code
-COPY . .
+COPY frontend/ .
 
 # Set the API URL for production
 ENV REACT_APP_API_URL=https://web--microsoft-agent-framework--4h7vh8ddvxpx.code.run
