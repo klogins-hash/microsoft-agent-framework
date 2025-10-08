@@ -1,0 +1,32 @@
+{
+  "name": "agent-framework-frontend",
+  "description": "Microsoft Agent Framework Chat Frontend - React SPA",
+  "billing": {
+    "deploymentPlan": "nf-compute-200-4"
+  },
+  "deployment": {
+    "instances": 1,
+    "docker": {
+      "configType": "default"
+    }
+  },
+  "ports": [
+    {
+      "name": "web",
+      "internalPort": 80,
+      "protocol": "HTTP",
+      "public": true
+    }
+  ],
+  "vcsData": {
+    "projectUrl": "https://github.com/klogins-hash/microsoft-agent-framework",
+    "projectType": "github", 
+    "projectBranch": "main"
+  },
+  "buildSettings": {
+    "dockerfile": {
+      "dockerFilePath": "/frontend/Dockerfile",
+      "dockerWorkDir": "/frontend"
+    }
+  }
+}
