@@ -148,8 +148,28 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
+    """Health check endpoint for Kubernetes probes."""
+    from datetime import datetime
+    
+    # Check if core services are initialized
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "services": {
+            "agent_builder": agent_builder is not None,
+            "team_orchestrator": team_orchestrator is not None,
+            "web_tools": web_tools is not None,
+            "file_tools": file_tools is not None,
+            "code_tools": code_tools is not None
+        }
+    }
+    
+    # If any core service is not initialized, return unhealthy
+    if not all(health_status["services"].values()):
+        health_status["status"] = "unhealthy"
+        raise HTTPException(status_code=503, detail=health_status)
+    
+    return health_status
 
 
 @app.get("/templates")
